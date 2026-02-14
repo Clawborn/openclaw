@@ -15,6 +15,10 @@ struct SettingsTab: View {
     @AppStorage("voiceWake.enabled") private var voiceWakeEnabled: Bool = false
     @AppStorage("talk.enabled") private var talkEnabled: Bool = false
     @AppStorage("talk.button.enabled") private var talkButtonEnabled: Bool = true
+    @AppStorage("talk.local.voiceId") private var talkLocalVoiceId: String = ""
+    @AppStorage("talk.local.modelId") private var talkLocalModelId: String = ""
+    @AppStorage("talk.local.interruptOverrideEnabled") private var talkInterruptOverrideEnabled: Bool = false
+    @AppStorage("talk.local.interruptOnSpeech") private var talkInterruptOnSpeech: Bool = true
     @AppStorage("camera.enabled") private var cameraEnabled: Bool = true
     @AppStorage("location.enabledMode") private var locationEnabledModeRaw: String = OpenClawLocationMode.off.rawValue
     @AppStorage("location.preciseEnabled") private var locationPreciseEnabled: Bool = true
@@ -33,7 +37,6 @@ struct SettingsTab: View {
     @AppStorage("gateway.discovery.debugLogs") private var discoveryDebugLogsEnabled: Bool = false
     @AppStorage("canvas.debugStatusEnabled") private var canvasDebugStatusEnabled: Bool = false
     @AppStorage("onboarding.requestID") private var onboardingRequestID: Int = 0
-    @State private var connectStatus = ConnectStatusStore()
     @State private var connectingGatewayID: String?
     @State private var localIPAddress: String?
     @State private var lastLocationModeRaw: String = OpenClawLocationMode.off.rawValue
@@ -241,7 +244,6 @@ struct SettingsTab: View {
                                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             }
                         }
-                    }
                     } label: {
                         HStack(spacing: 10) {
                             Circle()
@@ -269,7 +271,20 @@ struct SettingsTab: View {
                         SecureField("Talk ElevenLabs API Key (optional)", text: self.$talkElevenLabsApiKey)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                        TextField("Talk Voice ID Override (optional)", text: self.$talkLocalVoiceId)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        TextField("Talk Model ID Override (optional)", text: self.$talkLocalModelId)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Toggle("Override Interrupt On Speech", isOn: self.$talkInterruptOverrideEnabled)
+                        if self.talkInterruptOverrideEnabled {
+                            Toggle("Interrupt On Speech", isOn: self.$talkInterruptOnSpeech)
+                        }
                         Text("Use this local override when gateway config redacts talk.apiKey for mobile clients.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Text("Voice/model overrides stay local to iOS and apply on next Talk request.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         // Keep this separate so users can hide the side bubble without disabling Talk Mode.
@@ -433,6 +448,19 @@ struct SettingsTab: View {
             }
             .onChange(of: self.talkElevenLabsApiKey) { _, newValue in
                 GatewaySettingsStore.saveTalkElevenLabsApiKey(newValue)
+                self.appModel.reloadTalkConfig()
+            }
+            .onChange(of: self.talkLocalVoiceId) { _, _ in
+                self.appModel.reloadTalkConfig()
+            }
+            .onChange(of: self.talkLocalModelId) { _, _ in
+                self.appModel.reloadTalkConfig()
+            }
+            .onChange(of: self.talkInterruptOverrideEnabled) { _, _ in
+                self.appModel.reloadTalkConfig()
+            }
+            .onChange(of: self.talkInterruptOnSpeech) { _, _ in
+                self.appModel.reloadTalkConfig()
             }
             .onChange(of: self.manualGatewayPort) { _, _ in
                 self.syncManualPortText()
@@ -610,7 +638,7 @@ struct SettingsTab: View {
 
         let err = await self.gatewayController.connectWithDiagnostics(gateway)
         if let err {
-            self.connectStatus.text = err
+            self.setupStatusText = err
         }
     }
 
@@ -1113,7 +1141,7 @@ struct SettingsTab: View {
             GatewaySettingsStore.saveGatewayPassword(trimmedPassword, instanceId: freshInstanceId)
         }
 
-        self.connectStatus.text = "Onboarding reset"
+        self.setupStatusText = "Onboarding reset"
         self.gatewayController.restartDiscovery()
 
         let defaults = UserDefaults.standard
@@ -1146,7 +1174,7 @@ struct SettingsTab: View {
             return
         }
 
-        self.connectStatus.text = "Reconnecting to \(host)…"
+        self.setupStatusText = "Reconnecting to \(host)…"
         self.connectingGatewayID = "reset"
         Task {
             await self.gatewayController.connectManual(host: host, port: port, useTLS: tls)
