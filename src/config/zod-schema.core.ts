@@ -57,7 +57,9 @@ export const ModelDefinitionSchema = z
 
 export const ModelProviderSchema = z
   .object({
-    baseUrl: z.string().min(1),
+    // baseUrl is optional to support auto-discovery providers (e.g. Ollama) that
+    // supply a default base URL at runtime when only an API key is configured.
+    baseUrl: z.string().min(1).optional(),
     apiKey: z.string().optional().register(sensitive),
     auth: z
       .union([z.literal("api-key"), z.literal("aws-sdk"), z.literal("oauth"), z.literal("token")])
@@ -65,7 +67,9 @@ export const ModelProviderSchema = z
     api: ModelApiSchema.optional(),
     headers: z.record(z.string(), z.string()).optional(),
     authHeader: z.boolean().optional(),
-    models: z.array(ModelDefinitionSchema),
+    // models is optional to support auto-discovery providers that enumerate
+    // available models at runtime (e.g. Ollama, Bedrock).
+    models: z.array(ModelDefinitionSchema).optional(),
   })
   .strict();
 

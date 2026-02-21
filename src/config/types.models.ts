@@ -42,13 +42,15 @@ export type ModelDefinitionConfig = {
 };
 
 export type ModelProviderConfig = {
-  baseUrl: string;
+  /** Base URL for the provider API. Optional for auto-discovery providers (e.g. Ollama). */
+  baseUrl?: string;
   apiKey?: string;
   auth?: ModelProviderAuthMode;
   api?: ModelApi;
   headers?: Record<string, string>;
   authHeader?: boolean;
-  models: ModelDefinitionConfig[];
+  /** Model list. Optional for providers that enumerate models at runtime (e.g. Ollama, Bedrock). */
+  models?: ModelDefinitionConfig[];
 };
 
 export type BedrockDiscoveryConfig = {
