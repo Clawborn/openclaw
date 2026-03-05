@@ -954,7 +954,10 @@ export async function resolveImplicitProviders(params: {
   const kimiCodingKey =
     resolveEnvApiKeyVarName("kimi-coding") ??
     resolveApiKeyFromProfiles({ provider: "kimi-coding", store: authStore });
-  if (kimiCodingKey) {
+  // Only create implicit kimi-coding provider when there is no explicit config.
+  // Explicit config may have a user-defined baseUrl that the hardcoded
+  // buildKimiCodingProvider() would clobber during mergeProviderModels (#36353).
+  if (kimiCodingKey && !params.explicitProviders?.["kimi-coding"]) {
     providers["kimi-coding"] = { ...buildKimiCodingProvider(), apiKey: kimiCodingKey };
   }
 
