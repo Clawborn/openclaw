@@ -7,6 +7,7 @@ import {
   parseModelRef,
   buildModelAliasIndex,
   normalizeModelSelection,
+  normalizeModelRef,
   normalizeProviderId,
   normalizeProviderIdForAuth,
   modelKey,
@@ -566,5 +567,27 @@ describe("normalizeModelSelection", () => {
     expect(normalizeModelSelection(undefined)).toBeUndefined();
     expect(normalizeModelSelection(null)).toBeUndefined();
     expect(normalizeModelSelection(42)).toBeUndefined();
+  });
+});
+
+describe("normalizeModelRef – Gemini 3.1 aliases (#38273)", () => {
+  it("normalizes google-vertex/gemini-3.1-pro-preview to gemini-3-pro-preview", () => {
+    const ref = normalizeModelRef("google-vertex", "gemini-3.1-pro-preview");
+    expect(ref.model).toBe("gemini-3-pro-preview");
+  });
+
+  it("normalizes google/gemini-3.1-pro-preview to gemini-3-pro-preview", () => {
+    const ref = normalizeModelRef("google", "gemini-3.1-pro-preview");
+    expect(ref.model).toBe("gemini-3-pro-preview");
+  });
+
+  it("normalizes google-vertex/gemini-3.1-flash-preview to gemini-3-flash-preview", () => {
+    const ref = normalizeModelRef("google-vertex", "gemini-3.1-flash-preview");
+    expect(ref.model).toBe("gemini-3-flash-preview");
+  });
+
+  it("normalizes google/gemini-3-1-pro to gemini-3-pro-preview", () => {
+    const ref = normalizeModelRef("google", "gemini-3-1-pro");
+    expect(ref.model).toBe("gemini-3-pro-preview");
   });
 });

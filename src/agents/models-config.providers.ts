@@ -438,11 +438,17 @@ function resolveApiKeyFromProfiles(params: {
 }
 
 export function normalizeGoogleModelId(id: string): string {
-  if (id === "gemini-3-pro") {
+  // Normalize dotted / hyphenated 3.1 variants to canonical 3-series IDs.
+  const normalized = id.replace(/^gemini-3[.-]1-/i, "gemini-3-");
+  if (normalized === "gemini-3-pro" || normalized === "gemini-3-pro-preview") {
     return "gemini-3-pro-preview";
   }
-  if (id === "gemini-3-flash") {
+  if (normalized === "gemini-3-flash" || normalized === "gemini-3-flash-preview") {
     return "gemini-3-flash-preview";
+  }
+  if (normalized !== id) {
+    // For any other gemini-3.1-* variant, return the normalized form.
+    return normalized;
   }
   return id;
 }
