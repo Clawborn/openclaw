@@ -73,6 +73,20 @@ export const GOOGLE_GEMINI_CLI_FLASH_TEMPLATE_MODEL = {
   maxTokens: 64000,
 };
 
+export const GOOGLE_VERTEX_PRO_TEMPLATE_MODEL = {
+  ...GOOGLE_GEMINI_CLI_PRO_TEMPLATE_MODEL,
+  provider: "google-vertex",
+  api: "google-vertex",
+  baseUrl: "https://us-central1-aiplatform.googleapis.com",
+};
+
+export const GOOGLE_PRO_TEMPLATE_MODEL = {
+  ...GOOGLE_GEMINI_CLI_PRO_TEMPLATE_MODEL,
+  provider: "google",
+  api: "google",
+  baseUrl: "https://generativelanguage.googleapis.com",
+};
+
 export function mockGoogleGeminiCliProTemplateModel(): void {
   mockDiscoveredModel({
     provider: "google-gemini-cli",
@@ -86,6 +100,22 @@ export function mockGoogleGeminiCliFlashTemplateModel(): void {
     provider: "google-gemini-cli",
     modelId: "gemini-3-flash-preview",
     templateModel: GOOGLE_GEMINI_CLI_FLASH_TEMPLATE_MODEL,
+  });
+}
+
+export function mockGoogleVertexProTemplateModel(): void {
+  mockDiscoveredModel({
+    provider: "google-vertex",
+    modelId: "gemini-3-pro-preview",
+    templateModel: GOOGLE_VERTEX_PRO_TEMPLATE_MODEL,
+  });
+}
+
+export function mockGoogleProTemplateModel(): void {
+  mockDiscoveredModel({
+    provider: "google",
+    modelId: "gemini-3-pro-preview",
+    templateModel: GOOGLE_PRO_TEMPLATE_MODEL,
   });
 }
 
