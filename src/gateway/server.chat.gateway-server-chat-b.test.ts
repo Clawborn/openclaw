@@ -416,4 +416,48 @@ describe("gateway server chat", () => {
       }, FAST_WAIT_OPTS);
     });
   });
+
+  test("chat.history filters out delivery-mirror bookkeeping entries", async () => {
+    await withGatewayChatHarness(async ({ ws, createSessionDir }) => {
+      await connectOk(ws);
+      const sessionDir = await createSessionDir();
+      await writeMainSessionStore();
+
+      const lines = [
+        JSON.stringify({
+          message: {
+            role: "user",
+            content: [{ type: "text", text: "hello" }],
+            timestamp: Date.now() - 2000,
+          },
+        }),
+        JSON.stringify({
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "hi there" }],
+            provider: "anthropic",
+            model: "claude-opus-4-0520",
+            timestamp: Date.now() - 1000,
+          },
+        }),
+        // Internal delivery-mirror entry that should be hidden from the UI
+        JSON.stringify({
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "hi there" }],
+            provider: "openclaw",
+            model: "delivery-mirror",
+            timestamp: Date.now(),
+          },
+        }),
+      ];
+      await writeMainSessionTranscript(sessionDir, lines);
+
+      const messages = await fetchHistoryMessages(ws);
+      // The delivery-mirror entry should be filtered out
+      expect(messages).toHaveLength(2);
+      const models = messages.map((m) => (m as Record<string, unknown>).model);
+      expect(models).not.toContain("delivery-mirror");
+    });
+  });
 });
