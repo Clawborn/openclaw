@@ -160,10 +160,14 @@ describe("message-normalizer", () => {
       expect(isToolResultMessage({ role: "TOOL_RESULT" })).toBe(true);
     });
 
+    it("returns true for tool role (OpenAI format)", () => {
+      expect(isToolResultMessage({ role: "tool" })).toBe(true);
+      expect(isToolResultMessage({ role: "TOOL" })).toBe(true);
+    });
+
     it("returns false for other roles", () => {
       expect(isToolResultMessage({ role: "user" })).toBe(false);
       expect(isToolResultMessage({ role: "assistant" })).toBe(false);
-      expect(isToolResultMessage({ role: "tool" })).toBe(false);
     });
 
     it("returns false for missing role", () => {
