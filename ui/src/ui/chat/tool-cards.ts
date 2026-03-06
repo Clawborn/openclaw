@@ -152,5 +152,20 @@ function extractToolText(item: Record<string, unknown>): string | undefined {
   if (typeof item.content === "string") {
     return item.content;
   }
+  // Handle array content (e.g. [{type:"text", text:"..."}]) used by many providers
+  if (Array.isArray(item.content)) {
+    const parts = item.content
+      .filter(
+        (p): p is Record<string, unknown> =>
+          p != null &&
+          typeof p === "object" &&
+          (p as Record<string, unknown>).type === "text" &&
+          typeof (p as Record<string, unknown>).text === "string",
+      )
+      .map((p) => (p as Record<string, string>).text);
+    if (parts.length > 0) {
+      return parts.join("\n");
+    }
+  }
   return undefined;
 }
