@@ -89,24 +89,6 @@ async function expectFallsBackToHaiku(params: {
   expect(run.mock.calls[1]?.[1]).toBe("claude-haiku-3-5");
 }
 
-function createOverrideFailureRun(params: {
-  overrideProvider: string;
-  overrideModel: string;
-  fallbackProvider: string;
-  fallbackModel: string;
-  firstError: Error;
-}) {
-  return vi.fn().mockImplementation(async (provider, model) => {
-    if (provider === params.overrideProvider && model === params.overrideModel) {
-      throw params.firstError;
-    }
-    if (provider === params.fallbackProvider && model === params.fallbackModel) {
-      return "ok";
-    }
-    throw new Error(`unexpected fallback candidate: ${provider}/${model}`);
-  });
-}
-
 function makeSingleProviderStore(params: {
   provider: string;
   usageStat: NonNullable<AuthProfileStore["usageStats"]>[string];
@@ -270,7 +252,7 @@ describe("runWithModelFallback", () => {
     });
   });
 
-  it("falls back directly to configured primary when an override model fails", async () => {
+  it("does not fall back to configured primary when an override model with different provider fails (#38394)", async () => {
     const cfg = makeCfg({
       agents: {
         defaults: {
@@ -282,28 +264,22 @@ describe("runWithModelFallback", () => {
       },
     });
 
-    const run = createOverrideFailureRun({
-      overrideProvider: "anthropic",
-      overrideModel: "claude-opus-4-5",
-      fallbackProvider: "openai",
-      fallbackModel: "gpt-4.1-mini",
-      firstError: Object.assign(new Error("unauthorized"), { status: 401 }),
-    });
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("unauthorized"), { status: 401 }));
 
-    const result = await runWithModelFallback({
-      cfg,
-      provider: "anthropic",
-      model: "claude-opus-4-5",
-      run,
-    });
+    // Cross-provider session overrides should NOT silently switch models.
+    await expect(
+      runWithModelFallback({
+        cfg,
+        provider: "anthropic",
+        model: "claude-opus-4-5",
+        run,
+      }),
+    ).rejects.toThrow();
 
-    expect(result.result).toBe("ok");
-    expect(result.provider).toBe("openai");
-    expect(result.model).toBe("gpt-4.1-mini");
-    expect(run.mock.calls).toEqual([
-      ["anthropic", "claude-opus-4-5"],
-      ["openai", "gpt-4.1-mini"],
-    ]);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith("anthropic", "claude-opus-4-5");
   });
 
   it("keeps configured fallback chain when current model is a configured fallback", async () => {
@@ -422,50 +398,42 @@ describe("runWithModelFallback", () => {
     expect(result.attempts[0]?.reason).toBe("billing");
   });
 
-  it("falls back to configured primary for override credential validation errors", async () => {
-    const cfg = makeCfg();
-    const run = createOverrideFailureRun({
-      overrideProvider: "anthropic",
-      overrideModel: "claude-opus-4",
-      fallbackProvider: "openai",
-      fallbackModel: "gpt-4.1-mini",
-      firstError: new Error('No credentials found for profile "anthropic:default".'),
-    });
-
-    const result = await runWithModelFallback({
-      cfg,
-      provider: "anthropic",
-      model: "claude-opus-4",
-      run,
-    });
-
-    expect(result.result).toBe("ok");
-    expect(run.mock.calls).toEqual([
-      ["anthropic", "claude-opus-4"],
-      ["openai", "gpt-4.1-mini"],
-    ]);
-  });
-
-  it("falls back on unknown model errors", async () => {
+  it("does not fall back to configured primary for cross-provider credential errors (#38394)", async () => {
     const cfg = makeCfg();
     const run = vi
       .fn()
-      .mockRejectedValueOnce(new Error("Unknown model: anthropic/claude-opus-4-6"))
-      .mockResolvedValueOnce("ok");
+      .mockRejectedValueOnce(new Error('No credentials found for profile "anthropic:default".'));
 
-    const result = await runWithModelFallback({
-      cfg,
-      provider: "anthropic",
-      model: "claude-opus-4-6",
-      run,
-    });
+    await expect(
+      runWithModelFallback({
+        cfg,
+        provider: "anthropic",
+        model: "claude-opus-4",
+        run,
+      }),
+    ).rejects.toThrow();
 
-    // Override model failed with model_not_found → falls back to configured primary.
-    // (Same candidate-resolution path as other override-model failures.)
-    expect(result.result).toBe("ok");
-    expect(run).toHaveBeenCalledTimes(2);
-    expect(run.mock.calls[1]?.[0]).toBe("openai");
-    expect(run.mock.calls[1]?.[1]).toBe("gpt-4.1-mini");
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith("anthropic", "claude-opus-4");
+  });
+
+  it("does not fall back cross-provider on unknown model errors (#38394)", async () => {
+    const cfg = makeCfg();
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Unknown model: anthropic/claude-opus-4-6"));
+
+    // Cross-provider override should not silently switch to configured primary.
+    await expect(
+      runWithModelFallback({
+        cfg,
+        provider: "anthropic",
+        model: "claude-opus-4-6",
+        run,
+      }),
+    ).rejects.toThrow();
+
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("falls back on model not found errors", async () => {
@@ -907,7 +875,7 @@ describe("runWithModelFallback", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
-  it("appends the configured primary as a last fallback", async () => {
+  it("appends the configured primary as a last fallback when same provider", async () => {
     const cfg = makeCfg({
       agents: {
         defaults: {
@@ -923,10 +891,11 @@ describe("runWithModelFallback", () => {
       .mockRejectedValueOnce(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" }))
       .mockResolvedValueOnce("ok");
 
+    // Same provider (openai) — configured primary should be appended as fallback.
     const result = await runWithModelFallback({
       cfg,
-      provider: "openrouter",
-      model: "meta-llama/llama-3.3-70b:free",
+      provider: "openai",
+      model: "gpt-4.1",
       run,
     });
 
@@ -934,6 +903,33 @@ describe("runWithModelFallback", () => {
     expect(run).toHaveBeenCalledTimes(2);
     expect(result.provider).toBe("openai");
     expect(result.model).toBe("gpt-4.1-mini");
+  });
+
+  it("does not append configured primary as fallback for cross-provider override (#38394)", async () => {
+    const cfg = makeCfg({
+      agents: {
+        defaults: {
+          model: {
+            primary: "openai/gpt-4.1-mini",
+            fallbacks: [],
+          },
+        },
+      },
+    });
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" }));
+
+    await expect(
+      runWithModelFallback({
+        cfg,
+        provider: "openrouter",
+        model: "meta-llama/llama-3.3-70b:free",
+        run,
+      }),
+    ).rejects.toThrow();
+
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   // Tests for Bug A fix: Model fallback with session overrides
@@ -997,13 +993,13 @@ describe("runWithModelFallback", () => {
       expect(run).toHaveBeenNthCalledWith(2, "groq", "llama-3.3-70b-versatile");
     });
 
-    it("still skips fallbacks when using different provider than config", async () => {
+    it("does not fall back to configured primary when using a different provider (session override)", async () => {
       const cfg = makeCfg({
         agents: {
           defaults: {
             model: {
               primary: "anthropic/claude-opus-4-6",
-              fallbacks: [], // Empty fallbacks to match working pattern
+              fallbacks: [],
             },
           },
         },
@@ -1011,21 +1007,16 @@ describe("runWithModelFallback", () => {
 
       const run = vi
         .fn()
-        .mockRejectedValueOnce(new Error('No credentials found for profile "openai:default".'))
-        .mockResolvedValueOnce("config primary worked");
+        .mockRejectedValueOnce(new Error('No credentials found for profile "openai:default".'));
 
-      const result = await runWithModelFallback({
-        cfg,
-        provider: "openai", // Different provider
-        model: "gpt-4.1-mini",
-        run,
-      });
-
-      // Cross-provider requests should skip configured fallbacks but still try configured primary
-      expect(result.result).toBe("config primary worked");
-      expect(run).toHaveBeenCalledTimes(2);
-      expect(run).toHaveBeenNthCalledWith(1, "openai", "gpt-4.1-mini"); // Original request
-      expect(run).toHaveBeenNthCalledWith(2, "anthropic", "claude-opus-4-6"); // Config primary as final fallback
+      // Cross-provider session overrides should NOT silently switch to the
+      // configured primary — that violates the override intent. Fixes #38394.
+      // With only one candidate, all attempts fail → throws.
+      await expect(
+        runWithModelFallback({ cfg, provider: "openai", model: "gpt-4.1-mini", run }),
+      ).rejects.toThrow();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(run).toHaveBeenNthCalledWith(1, "openai", "gpt-4.1-mini");
     });
 
     it("uses fallbacks when session model exactly matches config primary", async () => {

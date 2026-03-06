@@ -328,7 +328,17 @@ function resolveFallbackCandidates(params: {
   }
 
   if (params.fallbacksOverride === undefined && primary?.provider && primary.model) {
-    addExplicitCandidate({ provider: primary.provider, model: primary.model });
+    // Only add the configured primary as a tail fallback when the caller is
+    // already running that same model (or a close variant).  When the caller
+    // uses a session model override (different provider/model), falling back to
+    // the configured primary silently switches models — violating the
+    // override's intent.  Fixes #38394.
+    if (
+      sameModelCandidate(normalizedPrimary, configuredPrimary) ||
+      normalizedPrimary.provider === configuredPrimary.provider
+    ) {
+      addExplicitCandidate({ provider: primary.provider, model: primary.model });
+    }
   }
 
   return candidates;
