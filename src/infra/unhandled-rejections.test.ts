@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isAbortError, isTransientNetworkError } from "./unhandled-rejections.js";
+import {
+  isAbortError,
+  isToolValidationError,
+  isTransientNetworkError,
+} from "./unhandled-rejections.js";
 
 describe("isAbortError", () => {
   it("returns true for error with name AbortError", () => {
@@ -156,4 +160,31 @@ describe("isTransientNetworkError", () => {
     const error = new AggregateError([new Error("regular error")], "Multiple errors");
     expect(isTransientNetworkError(error)).toBe(false);
   });
+});
+
+describe("isToolValidationError", () => {
+  it("returns true for ZodError", () => {
+    const error = new Error("Validation failed");
+    error.name = "ZodError";
+    expect(isToolValidationError(error)).toBe(true);
+  });
+
+  it("returns true for ZodError nested in cause", () => {
+    const zodError = new Error("invalid_type");
+    zodError.name = "ZodError";
+    const wrapper = Object.assign(new Error("tool call failed"), { cause: zodError });
+    expect(isToolValidationError(wrapper)).toBe(true);
+  });
+
+  it("returns false for regular errors", () => {
+    expect(isToolValidationError(new Error("Something went wrong"))).toBe(false);
+    expect(isToolValidationError(new TypeError("Cannot read property"))).toBe(false);
+  });
+
+  it.each([null, undefined, "string error", 42])(
+    "returns false for non-object input %#",
+    (value) => {
+      expect(isToolValidationError(value)).toBe(false);
+    },
+  );
 });

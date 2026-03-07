@@ -113,6 +113,27 @@ export function isAbortError(err: unknown): boolean {
   return false;
 }
 
+/**
+ * Checks if an error is a schema/tool-argument validation error (e.g. ZodError)
+ * that escaped a try-catch. These come from malformed LLM tool calls and should
+ * never crash the gateway — log and continue.
+ */
+export function isToolValidationError(err: unknown): boolean {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+  const name = readErrorName(err);
+  if (name === "ZodError") {
+    return true;
+  }
+  // Catch nested ZodError in cause chain
+  const cause = getErrorCause(err);
+  if (cause && typeof cause === "object" && readErrorName(cause) === "ZodError") {
+    return true;
+  }
+  return false;
+}
+
 function isFatalError(err: unknown): boolean {
   const code = extractErrorCodeWithCause(err);
   return code !== undefined && FATAL_ERROR_CODES.has(code);
@@ -233,6 +254,11 @@ export function installUnhandledRejectionHandler(): void {
         "[openclaw] Non-fatal unhandled rejection (continuing):",
         formatUncaughtError(reason),
       );
+      return;
+    }
+
+    if (isToolValidationError(reason)) {
+      console.warn("[openclaw] Tool validation error (continuing):", formatUncaughtError(reason));
       return;
     }
 
