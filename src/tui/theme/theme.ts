@@ -9,7 +9,7 @@ import { highlight, supportsLanguage } from "cli-highlight";
 import type { SearchableSelectListTheme } from "../components/searchable-select-list.js";
 import { createSyntaxTheme } from "./syntax-theme.js";
 
-const palette = {
+const darkPalette = {
   text: "#E8E3D5",
   dim: "#7B7F87",
   accent: "#F6C453",
@@ -32,6 +32,67 @@ const palette = {
   error: "#F97066",
   success: "#7DD3A5",
 };
+
+/**
+ * High-contrast palette for light-background terminals.
+ * All foreground colours target ≥ 4.5:1 contrast ratio against white (#FFF)
+ * per WCAG AA. Enable via OPENCLAW_THEME=light or COLORFGBG detection.
+ */
+const lightPalette: typeof darkPalette = {
+  text: "#1A1A1A",
+  dim: "#555555",
+  accent: "#9B6700",
+  accentSoft: "#A85400",
+  border: "#B0B0B0",
+  userBg: "#E8E8E8",
+  userText: "#1A1A1A",
+  systemText: "#4A5568",
+  toolPendingBg: "#E0EFF5",
+  toolSuccessBg: "#E0F0E4",
+  toolErrorBg: "#FCE4E4",
+  toolTitle: "#9B6700",
+  toolOutput: "#2D2D2D",
+  quote: "#1A5B9C",
+  quoteBorder: "#6B8DB5",
+  code: "#8B5E00",
+  codeBlock: "#F4F4F4",
+  codeBorder: "#C0C0C0",
+  link: "#1A7F4B",
+  error: "#C53030",
+  success: "#1A7F4B",
+};
+
+/**
+ * Detect whether the terminal has a light background.
+ *
+ * Priority:
+ * 1. OPENCLAW_THEME=light|dark (explicit override)
+ * 2. COLORFGBG env var (set by many terminals: "fg;bg", bg >= 8 = light)
+ */
+function isLightBackground(): boolean {
+  const explicit = process.env.OPENCLAW_THEME?.toLowerCase();
+  if (explicit === "light") {
+    return true;
+  }
+  if (explicit === "dark") {
+    return false;
+  }
+
+  // COLORFGBG is "foreground;background" using ANSI colour indices (0-15).
+  // Indices 7 (white), 9-15 are typically light backgrounds.
+  const colorFgBg = process.env.COLORFGBG;
+  if (colorFgBg) {
+    const parts = colorFgBg.split(";");
+    const bgIndex = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(bgIndex) && bgIndex >= 7) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+const palette = isLightBackground() ? lightPalette : darkPalette;
 
 const fg = (hex: string) => (text: string) => chalk.hex(hex)(text);
 const bg = (hex: string) => (text: string) => chalk.bgHex(hex)(text);
