@@ -119,4 +119,23 @@ describe("redactSensitiveText", () => {
     });
     expect(output).toBe(input);
   });
+
+  it("redacts Anthropic API keys (sk-ant-)", () => {
+    const input = "key is sk-ant-api03-abcdefghijklmnopqrstuvwxyz";
+    const output = redactSensitiveText(input, { mode: "tools", patterns: defaults });
+    expect(output).not.toContain("abcdefghijklmnopqrstuvwxyz");
+    expect(output).toContain("sk-ant");
+  });
+
+  it("redacts AWS access key IDs", () => {
+    const input = "aws_key=AKIAIOSFODNN7EXAMPLE";
+    const output = redactSensitiveText(input, { mode: "tools", patterns: defaults });
+    expect(output).not.toContain("AKIAIOSFODNN7EXAMPLE");
+  });
+
+  it("redacts Feishu/Lark app tokens (cli_ prefix)", () => {
+    const input = "app_secret=cli_abcdef1234567890ab";
+    const output = redactSensitiveText(input, { mode: "tools", patterns: defaults });
+    expect(output).not.toContain("cli_abcdef1234567890ab");
+  });
 });

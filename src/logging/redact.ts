@@ -37,6 +37,17 @@ const DEFAULT_REDACT_PATTERNS: string[] = [
   // Telegram Bot API URLs embed the token as `/bot<token>/...` (no word-boundary before digits).
   String.raw`\bbot(\d{6,}:[A-Za-z0-9_-]{20,})\b`,
   String.raw`\b(\d{6,}:[A-Za-z0-9_-]{20,})\b`,
+  // Anthropic API keys.
+  String.raw`\b(sk-ant-[A-Za-z0-9_-]{20,})\b`,
+  // AWS access keys.
+  String.raw`\b(AKIA[0-9A-Z]{16})\b`,
+  // Mistral API keys.
+  String.raw`\b(mis-[A-Za-z0-9_-]{20,})\b`,
+  // Deepseek API keys.
+  String.raw`\b(ds-[A-Za-z0-9_-]{20,})\b`,
+  // Feishu/Lark app secrets and tokens.
+  String.raw`\b(cli_[A-Za-z0-9]{16,})\b`,
+  String.raw`\b(t-[A-Za-z0-9]{20,})\b`,
 ];
 
 type RedactOptions = {
