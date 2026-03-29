@@ -49,8 +49,22 @@ export function parseTtsDirectives(
   const providers = resolveDirectiveProviders(options);
   const overrides: TtsDirectiveOverrides = {};
   const warnings: string[] = [];
-  let cleanedText = text;
   let hasDirective = false;
+
+  // Mask fenced code blocks and inline code spans so that TTS tag examples
+  // written inside backtick sections are never treated as active directives.
+  const masked: string[] = [];
+  const maskedText = text
+    .replace(/```[\s\S]*?```/g, (m) => {
+      masked.push(m);
+      return `\u{FFFE}tts_mask_${masked.length - 1}\u{FFFE}`;
+    })
+    .replace(/`[^`]*`/g, (m) => {
+      masked.push(m);
+      return `\u{FFFE}tts_mask_${masked.length - 1}\u{FFFE}`;
+    });
+
+  let cleanedText = maskedText;
 
   const blockRegex = /\[\[tts:text\]\]([\s\S]*?)\[\[\/tts:text\]\]/gi;
   cleanedText = cleanedText.replace(blockRegex, (_match, inner: string) => {
@@ -122,6 +136,12 @@ export function parseTtsDirectives(
     }
     return "";
   });
+
+  // Restore masked code blocks and inline code spans.
+  cleanedText = cleanedText.replace(
+    /\u{FFFE}tts_mask_(\d+)\u{FFFE}/gu,
+    (_, i) => masked[Number(i)] ?? "",
+  );
 
   return {
     cleanedText,
